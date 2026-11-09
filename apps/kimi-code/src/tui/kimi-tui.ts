@@ -1547,6 +1547,7 @@ export class KimiTUI {
   // =========================================================================
 
   handlePlanToggle(next: boolean): void {
+    this.promptPredictionController.handlePlanModeChanged(next);
     void slashCommands.handlePlanCommand(this, next ? 'on' : 'off');
   }
 
