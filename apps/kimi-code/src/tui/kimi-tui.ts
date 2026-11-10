@@ -1169,6 +1169,12 @@ export class KimiTUI {
     void this.backgroundRefreshPromise?.then(() => {
       this.modelMigration.request();
     });
+    // Seed prompt from the environment (KIMI_TUI_PROMPT): goes through the
+    // same path as typed user input — history, slash dispatch, lazy session.
+    const startupPrompt = process.env['KIMI_TUI_PROMPT'];
+    if (startupPrompt !== undefined && startupPrompt.trim().length > 0) {
+      this.handleUserInput(startupPrompt);
+    }
   }
 
   private async showSessionWarnings(session: Session): Promise<void> {
