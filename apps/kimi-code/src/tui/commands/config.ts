@@ -31,6 +31,7 @@ import { TuiModeSelectorComponent } from '../components/dialogs/tui-mode-selecto
 import { UpdatePreferenceSelectorComponent } from '../components/dialogs/update-preference-selector';
 import {
   DEFAULT_MARKDOWN_CONFIG,
+  DEFAULT_PANES_CONFIG,
   DEFAULT_TUI_CONFIG,
   saveTuiConfig,
   type MarkdownConfig,
@@ -99,6 +100,7 @@ export function currentTuiConfig(host: Pick<SlashCommandHost, 'state'>): TuiConf
     statusLine: host.state.appState.statusLine ?? DEFAULT_TUI_CONFIG.statusLine,
     markdown: host.state.appState.markdown ?? DEFAULT_MARKDOWN_CONFIG,
     transcript: host.state.appState.transcript,
+    panes: host.state.appState.panes ?? DEFAULT_PANES_CONFIG,
   };
 }
 

@@ -21,7 +21,7 @@ import { NotifyPanelComponent } from './components/chrome/notify-panel';
 import { QueuePaneComponent } from './components/panes/queue-pane';
 import type { SessionRow } from './components/dialogs/session-picker';
 import { CustomEditor } from './components/editor/custom-editor';
-import { DEFAULT_MARKDOWN_CONFIG, DEFAULT_TUI_CONFIG } from './config';
+import { DEFAULT_MARKDOWN_CONFIG, DEFAULT_TUI_CONFIG, type PaneId, resolvePaneOrder } from './config';
 import { CHROME_GUTTER, DOCK_QUEUE_ROWS, DOCK_UPDATES_ROWS } from './constant/rendering';
 import { CLICK_GUARD_MS } from './constant/terminal';
 import type { TasksBrowserState } from './controllers/tasks-browser';
@@ -190,15 +190,29 @@ export function createTUIState(options: KimiTUIOptions): TUIState {
     // border) and the footer below 1 — otherwise the box outline gets clipped.
     const fullscreenView = new TranscriptView(transcriptContainer);
     transcriptView = fullscreenView;
-    dockContainer = new VStack();
-    dockContainer.addChild(activityContainer, { shrink: 1, minSize: 0 });
-    dockContainer.addChild(notifyPanelContainer, { shrink: 1, minSize: 0 });
+    const dock = new VStack();
+    dockContainer = dock;
     // A blocking prompt (approval or question) takes the space of the queue,
     // the btw panel and the footer, so its options stay on screen.
     const unlessBlocked = (): boolean => !isBlockingPromptPending(state);
-    dockContainer.addChild(queueContainer, { shrink: 1, minSize: 0, visible: unlessBlocked });
-    dockContainer.addChild(btwPanelContainer, { shrink: 1, minSize: 0, visible: unlessBlocked });
-    dockContainer.addChild(surveyContainer, { shrink: 0, minSize: 0 });
+    const dockPanes: Record<PaneId, () => void> = {
+      activity: () => {
+        dock.addChild(activityContainer, { shrink: 1, minSize: 0 });
+      },
+      notify: () => {
+        dock.addChild(notifyPanelContainer, { shrink: 1, minSize: 0 });
+      },
+      queue: () => {
+        dock.addChild(queueContainer, { shrink: 1, minSize: 0, visible: unlessBlocked });
+      },
+      btw: () => {
+        dock.addChild(btwPanelContainer, { shrink: 1, minSize: 0, visible: unlessBlocked });
+      },
+      survey: () => {
+        dock.addChild(surveyContainer, { shrink: 0, minSize: 0 });
+      },
+    };
+    for (const id of resolvePaneOrder(initialAppState.panes)) dockPanes[id]();
     editorSlot = new VStack();
     editorSlot.addChild(editorContainer, EDITOR_SLOT_ENTRY);
     dockContainer.addChild(editorSlot, EDITOR_SLOT_ENTRY);
@@ -320,4 +334,31 @@ export function isBlockingPromptPending(state: Pick<TUIState, 'livePane' | 'acti
     state.livePane.pendingQuestion !== null ||
     state.activeDialog === 'goal-start'
   );
+}
+
+/** The strips between transcript and editor, in the configured mount order (tui.toml [panes]). */
+export function paneContainers(
+  state: Pick<
+    TUIState,
+    | 'appState'
+    | 'activityContainer'
+    | 'notifyPanelContainer'
+    | 'queueContainer'
+    | 'btwPanelContainer'
+    | 'surveyContainer'
+  >,
+): Container[] {
+  const byId: Record<PaneId, Container> = {
+    activity: state.activityContainer,
+    notify: state.notifyPanelContainer,
+    queue: state.queueContainer,
+    btw: state.btwPanelContainer,
+    survey: state.surveyContainer,
+  };
+  return resolvePaneOrder(state.appState.panes).map((id) => byId[id]);
+}
+
+/** Whether the strip participates in the layout at all (tui.toml [panes]). */
+export function paneEnabled(state: Pick<TUIState, 'appState'>, id: PaneId): boolean {
+  return resolvePaneOrder(state.appState.panes).includes(id);
 }

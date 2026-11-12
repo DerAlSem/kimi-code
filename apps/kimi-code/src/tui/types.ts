@@ -12,7 +12,7 @@ import type {
   ToolInputDisplay,
 } from '@moonshot-ai/kimi-code-sdk';
 
-import type { MarkdownConfig, NotificationsConfig, StatusLineConfig, TranscriptConfig, TuiMode, UpgradePreferences } from './config';
+import type { MarkdownConfig, NotificationsConfig, PanesConfig, StatusLineConfig, TranscriptConfig, TuiMode, UpgradePreferences } from './config';
 import type { PendingApproval, PendingQuestion } from './reverse-rpc/types';
 import type { ColorToken, ThemeName } from './theme';
 import type { MediaAttachment, VideoAttachment } from './utils/image-attachment-store';
@@ -99,6 +99,8 @@ export interface AppState {
   statusLine?: StatusLineConfig;
   markdown?: MarkdownConfig;
   transcript: TranscriptConfig;
+  /** tui.toml [panes]: mount order and hidden strips; absent means the default layout. */
+  panes?: PanesConfig;
   availableModels: Record<string, ModelAlias>;
   availableProviders: Record<string, ProviderConfig>;
   sessionTitle: string | null;

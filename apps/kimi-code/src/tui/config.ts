@@ -56,6 +56,29 @@ export const DEFAULT_STATUS_LINE_CONFIG: StatusLineConfig = {
   command: null,
 };
 
+export const PANE_IDS = ['activity', 'notify', 'queue', 'btw', 'survey'] as const;
+export type PaneId = (typeof PANE_IDS)[number];
+
+export const PanesConfigSchema = z.object({
+  /** Mount order of the strips between transcript and editor; ids unlisted in
+   * the file keep the default relative order at the end. */
+  order: z.array(z.enum(PANE_IDS)),
+  /** Strips never mounted; wins over `order`. */
+  disabled: z.array(z.enum(PANE_IDS)),
+});
+export type PanesConfig = z.infer<typeof PanesConfigSchema>;
+
+export const DEFAULT_PANES_CONFIG: PanesConfig = {
+  order: [...PANE_IDS],
+  disabled: [],
+};
+
+export function resolvePaneOrder(panes: PanesConfig | undefined): PaneId[] {
+  const cfg = panes ?? DEFAULT_PANES_CONFIG;
+  const disabled = new Set<PaneId>(cfg.disabled);
+  return cfg.order.filter((id) => !disabled.has(id));
+}
+
 export const MarkdownConfigSchema = z.object({
   mermaid: z.enum(['off', 'final']),
 });
@@ -129,6 +152,12 @@ export const TuiConfigFileSchema = z.object({
         .optional(),
     })
     .optional(),
+  panes: z
+    .object({
+      order: z.array(z.string()).optional(),
+      disabled: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 export const TuiConfigSchema = z.object({
@@ -155,6 +184,9 @@ export const TuiConfigSchema = z.object({
    * fixtures from before this field existed still typecheck. */
   markdown: MarkdownConfigSchema.optional(),
   transcript: TranscriptConfigSchema,
+  /** Present in every normalized config; optional only so hand-built test
+   * fixtures from before this field existed still typecheck. */
+  panes: PanesConfigSchema.optional(),
 });
 
 export type TuiConfigFileShape = z.infer<typeof TuiConfigFileSchema>;
@@ -184,6 +216,7 @@ export const DEFAULT_TUI_CONFIG: TuiConfig = TuiConfigSchema.parse({
   statusLine: DEFAULT_STATUS_LINE_CONFIG,
   markdown: DEFAULT_MARKDOWN_CONFIG,
   transcript: DEFAULT_TRANSCRIPT_CONFIG,
+  panes: DEFAULT_PANES_CONFIG,
 });
 
 /**
@@ -330,6 +363,21 @@ export function normalizeTuiConfig(
     else warn(`[tui.toml] ignoring unknown transcript.group.tools value: ${groupToolsValue}`);
   }
   const groupThinking = config.transcript?.group?.group_thinking ?? DEFAULT_TRANSCRIPT_CONFIG.groupThinking;
+  const knownPanes = new Set<string>(PANE_IDS);
+  const paneIds = (value: string[] | undefined, key: 'order' | 'disabled'): PaneId[] => {
+    const seen = new Set<string>();
+    return (value ?? []).filter((id) => {
+      if (!knownPanes.has(id)) {
+        warn(`[tui.toml] ignoring unknown panes.${key} entry: ${id}`);
+        return false;
+      }
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }) as PaneId[];
+  };
+  const paneOrder = paneIds(config.panes?.order, 'order');
+  for (const id of PANE_IDS) if (!paneOrder.includes(id)) paneOrder.push(id);
   const tuiModeValue = config.tui_mode;
   let tuiMode: TuiMode = 'regular';
   if (tuiModeValue !== undefined) {
@@ -369,6 +417,10 @@ export function normalizeTuiConfig(
     transcript: {
       groupTools,
       groupThinking,
+    },
+    panes: {
+      order: paneOrder,
+      disabled: paneIds(config.panes?.disabled, 'disabled'),
     },
   });
 }
@@ -416,6 +468,20 @@ export function renderTuiConfig(config: TuiConfig): string {
 # It receives a JSON snapshot (model, cwd, git, usage, mode) on stdin.
 # command = "~/.kimi-code/statusline.sh"
 `;
+  const panes = config.panes ?? DEFAULT_PANES_CONFIG;
+  const panesDefault =
+    panes.disabled.length === 0 &&
+    panes.order.length === PANE_IDS.length &&
+    panes.order.every((id, index) => id === PANE_IDS[index]);
+  const panesSection = panesDefault
+    ? `# [panes]
+# Reorder the strips between the transcript and the editor, or hide some for
+# good: ${PANE_IDS.join(', ')}
+# Unlisted "order" entries follow in the default order; "disabled" always wins.
+# order = ${JSON.stringify([...PANE_IDS])}
+# disabled = [] # e.g. ["notify", "queue"]
+`
+    : `[panes]\norder = ${JSON.stringify(panes.order)}\ndisabled = ${JSON.stringify(panes.disabled)}\n`;
   return `# ~/.kimi-code/tui.toml
 # Client preferences for kimi-code.
 # Agent/runtime settings stay in ~/.kimi-code/config.toml.
@@ -439,7 +505,8 @@ auto_install = ${String(config.upgrade.autoInstall)} # true | false
 
 ${markdownSection}
 ${transcriptSection}
-${statusSection}`;
+${statusSection}
+${panesSection}`;
 }
 
 function escapeTomlBasicString(value: string): string {

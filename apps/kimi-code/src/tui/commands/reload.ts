@@ -83,6 +83,7 @@ export async function applyReloadedTuiConfig(
     statusLine: config.statusLine,
     markdown: config.markdown,
     transcript: config.transcript,
+    panes: config.panes,
   });
   applyTranscriptPresentation(host);
   host.state.editor.setDisablePasteBurst(config.disablePasteBurst);

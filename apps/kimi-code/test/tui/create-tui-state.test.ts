@@ -159,4 +159,31 @@ describe('createTUIState', () => {
     expect(typeof internals.openUrl).toBe('function');
     expect(typeof internals.onRightClickPaste).toBe('function');
   });
+
+  it('orders and hides fullscreen dock panes per appState.panes', () => {
+    const state = createTUIState({
+      initialAppState: {
+        ...fakeInitialAppState(),
+        tuiMode: 'fullscreen',
+        panes: {
+          order: ['btw', 'queue', 'activity', 'notify', 'survey'],
+          disabled: ['notify'],
+        },
+      },
+      startup: {
+        continueLast: false,
+        yolo: false,
+        auto: false,
+        plan: false,
+      },
+    });
+
+    expect(state.dockContainer?.children).toEqual([
+      state.btwPanelContainer,
+      state.queueContainer,
+      state.activityContainer,
+      state.surveyContainer,
+      state.editorSlot,
+    ]);
+  });
 });

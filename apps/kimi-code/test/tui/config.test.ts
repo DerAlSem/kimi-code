@@ -10,6 +10,7 @@ import {
   loadTuiConfig,
   parseTuiConfig,
   removeLegacySurveySetting,
+  resolvePaneOrder,
   saveTuiConfig,
   TuiConfigParseError,
 } from '#/tui/config';
@@ -76,6 +77,7 @@ auto_install = false
       statusLine: { items: null, command: null },
       markdown: { mermaid: 'final' },
       transcript: { groupTools: 'auto', groupThinking: true },
+      panes: { order: ['activity', 'notify', 'queue', 'btw', 'survey'], disabled: [] },
     });
   });
 
@@ -146,6 +148,7 @@ command = "   "
       statusLine: { items: null, command: null },
       markdown: { mermaid: 'final' },
       transcript: { groupTools: 'auto', groupThinking: true },
+      panes: { order: ['activity', 'notify', 'queue', 'btw', 'survey'], disabled: [] },
     });
   });
 
@@ -198,6 +201,7 @@ command = "   "
       statusLine: { items: null, command: null },
       markdown: { mermaid: 'final' },
       transcript: { groupTools: 'auto', groupThinking: true },
+      panes: { order: ['activity', 'notify', 'queue', 'btw', 'survey'], disabled: [] },
     });
   });
 
@@ -431,6 +435,90 @@ command = "   "
     expect(text).toContain('[status_line]');
     expect(text).toContain('items');
     expect(text).toContain('command');
+  });
+});
+
+describe('TUI config panes', () => {
+  it('defaults to the built-in order with nothing disabled when the section is omitted', () => {
+    const config = parseTuiConfig(`theme = "dark"`);
+
+    expect(config.panes).toEqual({
+      order: ['activity', 'notify', 'queue', 'btw', 'survey'],
+      disabled: [],
+    });
+    expect(resolvePaneOrder(config.panes)).toEqual(['activity', 'notify', 'queue', 'btw', 'survey']);
+  });
+
+  it('parses order and disabled, with disabled winning over order', () => {
+    const config = parseTuiConfig(`
+[panes]
+order = ["btw", "queue", "activity", "notify", "survey"]
+disabled = ["notify"]
+`);
+
+    expect(config.panes?.order).toEqual(['btw', 'queue', 'activity', 'notify', 'survey']);
+    expect(config.panes?.disabled).toEqual(['notify']);
+    expect(resolvePaneOrder(config.panes)).toEqual(['btw', 'queue', 'activity', 'survey']);
+  });
+
+  it('appends unlisted order entries in the default order and drops duplicates', () => {
+    const config = parseTuiConfig(`
+[panes]
+order = ["btw", "queue", "btw"]
+`);
+
+    expect(config.panes?.order).toEqual(['btw', 'queue', 'activity', 'notify', 'survey']);
+  });
+
+  it('skips unknown entries with a warning instead of failing the whole file', () => {
+    const warnings: string[] = [];
+    const config = parseTuiConfig(
+      `
+[panes]
+order = ["queue", "wat"]
+disabled = ["nope"]
+`,
+      (message) => warnings.push(message),
+    );
+
+    expect(config.panes?.order).toEqual(['queue', 'activity', 'notify', 'btw', 'survey']);
+    expect(config.panes?.disabled).toEqual([]);
+    expect(warnings).toEqual([
+      '[tui.toml] ignoring unknown panes.order entry: wat',
+      '[tui.toml] ignoring unknown panes.disabled entry: nope',
+    ]);
+  });
+
+  it('keeps the [panes] section a commented guide by default', async () => {
+    await saveTuiConfig(DEFAULT_TUI_CONFIG, filePath);
+
+    const text = readFileSync(filePath, 'utf-8');
+    expect(text).toContain('# [panes]');
+    expect(text).toContain('# order =');
+    expect(text).toContain('# disabled =');
+    expect(text).not.toContain('\n[panes]');
+  });
+
+  it('writes a live [panes] section when customized and round-trips it', async () => {
+    await saveTuiConfig(
+      {
+        ...DEFAULT_TUI_CONFIG,
+        panes: {
+          order: ['btw', 'queue', 'activity', 'notify', 'survey'],
+          disabled: ['notify'],
+        },
+      },
+      filePath,
+    );
+
+    const text = readFileSync(filePath, 'utf-8');
+    expect(text).toContain('\n[panes]\n');
+    const reloaded = await loadTuiConfig(filePath);
+    expect(reloaded.panes).toEqual({
+      order: ['btw', 'queue', 'activity', 'notify', 'survey'],
+      disabled: ['notify'],
+    });
+    expect(resolvePaneOrder(reloaded.panes)).toEqual(['btw', 'queue', 'activity', 'survey']);
   });
 });
 

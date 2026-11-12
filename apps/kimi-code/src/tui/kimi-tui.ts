@@ -158,7 +158,7 @@ import { createQuestionAskHandler } from './reverse-rpc/question/handler';
 import type { ApprovalPanelData, QuestionPanelData } from './reverse-rpc/types';
 import { currentTheme, getColorPalette, getBuiltInPalette } from './theme';
 import type { ColorToken, ResolvedTheme, ThemeName } from './theme';
-import { createTUIState, mountFooter, setEditorSlot, type TUIState } from './tui-state';
+import { createTUIState, mountFooter, paneContainers, paneEnabled, setEditorSlot, type TUIState } from './tui-state';
 import {
   INITIAL_LIVE_PANE,
   isPromptQueuedMessage,
@@ -326,6 +326,7 @@ function createInitialAppState(input: KimiTUIStartupInput): AppState {
     statusLine: input.tuiConfig.statusLine,
     markdown: input.tuiConfig.markdown,
     transcript: input.tuiConfig.transcript,
+    panes: input.tuiConfig.panes,
     availableModels: {},
     availableProviders: {},
     sessionTitle: null,
@@ -697,7 +698,9 @@ export class KimiTUI {
   }
 
   refreshSlashCommandAutocomplete(): void {
-    this.sessionEventHandler.notifications.setEnabled(isExperimentalFlagEnabled('notify_user'));
+    this.sessionEventHandler.notifications.setEnabled(
+      isExperimentalFlagEnabled('notify_user') && paneEnabled(this.state, 'notify'),
+    );
     this.setupAutocomplete();
   }
 
@@ -1199,7 +1202,9 @@ export class KimiTUI {
   private async init(): Promise<boolean> {
     setExperimentalFeatures(await this.harness.getExperimentalFeatures());
     applyTranscriptPresentation(this);
-    this.sessionEventHandler.notifications.setEnabled(isExperimentalFlagEnabled('notify_user'));
+    this.sessionEventHandler.notifications.setEnabled(
+      isExperimentalFlagEnabled('notify_user') && paneEnabled(this.state, 'notify'),
+    );
     if (this.state.ui instanceof TuiAltScreen) {
       this.track('transcript_display_settings', {
         group_tools: this.state.appState.transcript.groupTools,
@@ -1502,11 +1507,7 @@ export class KimiTUI {
     if (ui instanceof TuiAltScreen) return;
     ui.clear();
     ui.addChild(this.state.transcriptContainer);
-    ui.addChild(this.state.activityContainer);
-    ui.addChild(this.state.notifyPanelContainer);
-    ui.addChild(this.state.queueContainer);
-    ui.addChild(this.state.btwPanelContainer);
-    ui.addChild(this.state.surveyContainer);
+    for (const pane of paneContainers(this.state)) ui.addChild(pane);
     ui.addChild(this.state.editorContainer);
     // Footer is mounted later (mountFooter), not here.
   }
@@ -1524,11 +1525,7 @@ export class KimiTUI {
     ui.stop({ preserveScreen: true });
     const main = new TuiMainScreen(ui.terminal);
     main.addChild(this.state.transcriptContainer);
-    main.addChild(this.state.activityContainer);
-    main.addChild(this.state.notifyPanelContainer);
-    main.addChild(this.state.queueContainer);
-    main.addChild(this.state.btwPanelContainer);
-    main.addChild(this.state.surveyContainer);
+    for (const pane of paneContainers(this.state)) main.addChild(pane);
     main.addChild(this.state.editorContainer);
     const footerWrap = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
     footerWrap.addChild(this.state.footer);
